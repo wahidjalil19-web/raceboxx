@@ -1,1 +1,430 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JavaTech Race Box PRO Ultimate MAX+</title>
 
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#111;
+color:white;
+text-align:center;
+}
+
+.header{
+background:#111;
+padding:15px;
+font-size:26px;
+font-weight:bold;
+color:#00ff9c;
+display:flex;
+align-items:center;
+justify-content:center;
+gap:10px;
+}
+
+.logo{
+width:40px;
+}
+
+.container{
+padding:20px;
+max-width:700px;
+margin:auto;
+}
+
+.timer{
+font-size:60px;
+font-weight:bold;
+margin:20px 0;
+color:#00ff9c;
+}
+
+.speedContainer{
+display:flex;
+justify-content:center;
+gap:30px;
+margin:20px 0;
+}
+
+.speedometer{
+position:relative;
+width:200px;
+height:200px;
+}
+
+.speedometer svg{
+transform:rotate(-90deg);
+}
+
+.speed-text{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:20px;
+font-weight:bold;
+color:#00ff9c;
+text-align:center;
+}
+
+.speed-text span{
+font-size:32px;
+}
+
+.panel{
+display:grid;
+grid-template-columns:repeat(5,1fr);
+gap:10px;
+margin-top:20px;
+}
+
+.card{
+background:#222;
+padding:12px;
+border-radius:10px;
+font-size:16px;
+}
+
+.card span{
+font-size:22px;
+color:#00ff9c;
+}
+
+.buttons{
+margin-top:20px;
+}
+
+button{
+font-size:16px;
+padding:12px 18px;
+margin:6px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-weight:bold;
+}
+
+.start{background:#00ff9c;color:black;}
+.reset{background:#ff3b3b;color:white;}
+.historybtn{background:#2b7cff;color:white;}
+
+#history{
+margin-top:20px;
+text-align:left;
+}
+
+.historyCard{
+background:#222;
+padding:12px;
+border-radius:8px;
+margin:6px 0;
+}
+
+.chart-container{
+margin-top:30px;
+background:#111;
+padding:15px;
+border-radius:10px;
+}
+
+canvas{
+background:#222;
+border-radius:10px;
+}
+
+.footer{
+margin-top:20px;
+font-size:14px;
+color:#777;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<img src="logo.png" class="logo">
+JavaTech Race Box PRO
+</div>
+
+<div class="container">
+
+<div class="timer" id="timer">0.000</div>
+
+<div class="speedContainer">
+
+<div class="speedometer">
+<svg width="200" height="200">
+<circle cx="100" cy="100" r="90" stroke="#444" stroke-width="15" fill="none"/>
+<circle id="speedArc" cx="100" cy="100" r="90"
+stroke="#00ff9c" stroke-width="15"
+fill="none"
+stroke-dasharray="565"
+stroke-dashoffset="565"
+stroke-linecap="round"/>
+</svg>
+
+<div class="speed-text">
+Speed<br>
+<span id="speed">0</span> km/h
+</div>
+</div>
+
+<div class="speedometer">
+<svg width="200" height="200">
+<circle cx="100" cy="100" r="90" stroke="#444" stroke-width="15" fill="none"/>
+<circle id="topArc" cx="100" cy="100" r="90"
+stroke="#00ff9c"
+stroke-width="15"
+fill="none"
+stroke-dasharray="565"
+stroke-dashoffset="565"
+stroke-linecap="round"/>
+</svg>
+
+<div class="speed-text">
+Top Speed<br>
+<span id="topspeed">0</span> km/h
+</div>
+</div>
+
+</div>
+
+<div class="panel">
+<div class="card">0-60<br><span id="zero60">-</span></div>
+<div class="card">60m<br><span id="m60">-</span></div>
+<div class="card">201m<br><span id="m201">-</span></div>
+<div class="card">401m<br><span id="m401">-</span></div>
+<div class="card">501m<br><span id="m501">-</span></div>
+</div>
+
+<div class="buttons">
+<button class="start" onclick="startRace()">START</button>
+<button class="reset" onclick="resetRace()">RESET</button>
+<button class="historybtn" onclick="showHistory()">HISTORY</button>
+</div>
+
+<div id="history"></div>
+
+<div class="chart-container">
+<canvas id="speedChart" height="150"></canvas>
+<canvas id="distanceChart" height="150"></canvas>
+</div>
+
+<div class="footer">
+JavaTech Racing Technology
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+
+let watchID,startTime,startPos
+let topSpeed=0
+
+let zero60done=false
+let m60done=false
+let m201done=false
+let m401done=false
+let m501done=false
+
+let history=[]
+let riderName=""
+
+let speedData=[]
+let distanceData=[]
+let timeData=[]
+
+const ctxSpeed=document.getElementById('speedChart')
+const ctxDistance=document.getElementById('distanceChart')
+
+const speedChart=new Chart(ctxSpeed,{
+type:'line',
+data:{labels:[],datasets:[{label:'Speed',data:[],borderColor:'#00ff9c'}]},
+options:{animation:false}
+})
+
+const distanceChart=new Chart(ctxDistance,{
+type:'line',
+data:{labels:[],datasets:[{label:'Distance',data:[],borderColor:'#ff9900'}]},
+options:{animation:false}
+})
+
+function startRace(){
+
+if(!navigator.geolocation){
+alert("GPS tidak didukung")
+return
+}
+
+riderName=prompt("Nama Rider / Motor")
+if(!riderName) riderName="Anonymous"
+
+navigator.geolocation.getCurrentPosition(pos=>{
+
+startPos=pos.coords
+startTime=Date.now()
+
+watchID=navigator.geolocation.watchPosition(updateRace,error,{
+enableHighAccuracy:true
+})
+
+})
+
+}
+
+function updateRace(pos){
+
+let speed=(pos.coords.speed||0)*3.6
+if(speed<3) speed=0
+
+document.getElementById("speed").innerText=speed.toFixed(1)
+
+if(speed>topSpeed){
+topSpeed=speed
+document.getElementById("topspeed").innerText=topSpeed.toFixed(1)
+}
+
+updateSpeedometer(speed)
+
+let time=(Date.now()-startTime)/1000
+document.getElementById("timer").innerText=time.toFixed(3)
+
+let distance=getDistance(
+startPos.latitude,
+startPos.longitude,
+pos.coords.latitude,
+pos.coords.longitude
+)
+
+if(speed>=60&&!zero60done){
+document.getElementById("zero60").innerText=time.toFixed(2)
+zero60done=true
+}
+
+if(distance>=60&&!m60done){
+document.getElementById("m60").innerText=time.toFixed(2)
+m60done=true
+}
+
+if(distance>=201&&!m201done){
+document.getElementById("m201").innerText=time.toFixed(2)
+m201done=true
+}
+
+if(distance>=401&&!m401done){
+document.getElementById("m401").innerText=time.toFixed(2)
+m401done=true
+}
+
+if(distance>=501&&!m501done){
+document.getElementById("m501").innerText=time.toFixed(2)
+m501done=true
+saveHistory(time)
+}
+
+timeData.push(time)
+speedData.push(speed)
+distanceData.push(distance)
+
+speedChart.data.labels=timeData
+speedChart.data.datasets[0].data=speedData
+speedChart.update()
+
+distanceChart.data.labels=timeData
+distanceChart.data.datasets[0].data=distanceData
+distanceChart.update()
+
+}
+
+function updateSpeedometer(speed){
+
+const circle=document.getElementById("speedArc")
+const maxSpeed=200
+let percent=Math.min(speed/maxSpeed,1)
+
+circle.style.strokeDashoffset=565-(565*percent)
+
+}
+
+function resetRace(){
+
+navigator.geolocation.clearWatch(watchID)
+
+document.getElementById("timer").innerText="0.000"
+document.getElementById("speed").innerText="0"
+document.getElementById("topspeed").innerText="0"
+
+speedChart.data.labels=[]
+speedChart.data.datasets[0].data=[]
+speedChart.update()
+
+distanceChart.data.labels=[]
+distanceChart.data.datasets[0].data=[]
+distanceChart.update()
+
+}
+
+function saveHistory(time){
+
+let data={
+name:riderName,
+time:time.toFixed(2),
+top:topSpeed.toFixed(1)
+}
+
+history.push(data)
+localStorage.setItem("raceHistory",JSON.stringify(history))
+
+}
+
+function showHistory(){
+
+history=JSON.parse(localStorage.getItem("raceHistory"))||[]
+
+let text="<h2>History</h2>"
+
+history.forEach((h,i)=>{
+text+=`<div class="historyCard">
+Run ${i+1} - ${h.name}<br>
+Top Speed ${h.top} km/h<br>
+501m ${h.time}s
+</div>`
+})
+
+document.getElementById("history").innerHTML=text
+
+}
+
+function getDistance(lat1,lon1,lat2,lon2){
+
+let R=6371000
+
+let dLat=(lat2-lat1)*Math.PI/180
+let dLon=(lon2-lon1)*Math.PI/180
+
+let a=Math.sin(dLat/2)**2+
+Math.cos(lat1*Math.PI/180)*
+Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)**2
+
+let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
+
+return R*c
+
+}
+
+function error(){
+alert("GPS Error - aktifkan GPS")
+}
+
+</script>
+
+</body>
+</html>
